@@ -28,6 +28,7 @@ any other plugin that happens to also ship a module named ``db``.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -433,6 +434,78 @@ def list_profiles():
         return {"profiles": [p.name for p in _list_profiles()]}
     except Exception:
         return {"profiles": []}
+
+
+# ---------------------------------------------------------------------------
+# Scheduled tasks — read-only view of every profile's Hermes cron store
+# (~/.hermes/profiles/<profile>/cron/jobs.json, shaped {"jobs": [...]}).
+# Backs the dashboard's Scheduled Tasks tab, which lists each fleet agent
+# in hierarchy order with the agent's scheduled jobs underneath. Missing,
+# unreadable, or malformed stores read as an empty job list — never a 500.
+# ---------------------------------------------------------------------------
+
+_PROMPT_SUMMARY_LIMIT = 200
+
+
+def _scheduled_profile_names() -> list[str]:
+    try:
+        from hermes_cli.profiles import list_profiles as _list_profiles
+
+        return [p.name for p in _list_profiles()]
+    except Exception:
+        root = Path.home() / ".hermes" / "profiles"
+        try:
+            return sorted(d.name for d in root.iterdir() if d.is_dir())
+        except Exception:
+            return []
+
+
+def _summarise_job(job: dict) -> dict:
+    prompt = job.get("prompt") or ""
+    prompt_summary = prompt[:_PROMPT_SUMMARY_LIMIT]
+    if len(prompt) > _PROMPT_SUMMARY_LIMIT:
+        prompt_summary += "…"
+    repeat = job.get("repeat") or {}
+    schedule = job.get("schedule") or {}
+    return {
+        "id": job.get("id") or "",
+        "name": job.get("name") or job.get("id") or "",
+        "schedule_display": job.get("schedule_display") or schedule.get("display") or "",
+        "state": job.get("state"),
+        "enabled": bool(job.get("enabled", True)),
+        "next_run_at": job.get("next_run_at"),
+        "last_run_at": job.get("last_run_at"),
+        "last_status": job.get("last_status"),
+        "last_error": job.get("last_error"),
+        "deliver": job.get("deliver"),
+        "runs_completed": repeat.get("completed") or 0,
+        "prompt_summary": prompt_summary,
+    }
+
+
+def _read_profile_jobs(profile: str) -> list[dict]:
+    path = Path.home() / ".hermes" / "profiles" / profile / "cron" / "jobs.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return []
+    out = [_summarise_job(j) for j in jobs if isinstance(j, dict)]
+    # Next run first; jobs without a next_run_at sort last.
+    out.sort(key=lambda j: (j["next_run_at"] is None, j["next_run_at"] or ""))
+    return out
+
+
+@router.get("/scheduled-tasks")
+def list_scheduled_tasks():
+    return {
+        "profiles": [
+            {"profile": name, "jobs": _read_profile_jobs(name)}
+            for name in _scheduled_profile_names()
+        ]
+    }
 
 
 # ---------------------------------------------------------------------------

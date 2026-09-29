@@ -24,6 +24,7 @@ A Hermes Agent plugin for managing organizational hierarchies — fleets, teams,
 ### Dashboard
 - Fleet overview with agent counts, team stats, and blocked task indicators
 - Per-fleet hierarchy flowcharts embedded in the Org Chart view
+- Scheduled Tasks view: every fleet agent in hierarchy order with their scheduled tasks listed underneath
 - Unassigned agent profile detection
 
 ## CLI Commands
@@ -77,6 +78,7 @@ All routes are mounted at `/api/plugins/hermes-legion/`.
 | POST | `/projects/{id}/documents` | Add document |
 | GET | `/tasks` | List tasks across fleet boards |
 | POST | `/tasks` | Create task |
+| GET | `/scheduled-tasks` | Scheduled tasks per agent profile (cron jobs) |
 
 ## Installation
 
