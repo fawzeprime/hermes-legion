@@ -16,7 +16,7 @@ def register(ctx) -> None:
         setup_fn=register_cli,
         handler_fn=fleet_command,
         description=(
-            "Operator CLI for the Hermes Legion org-chart layer: companies, 
+            "Operator CLI for the Hermes Legion org-chart layer: companies, "
             "teams, and memberships (role + reporting line) across Hermes "
             "agent profiles."
         ),
