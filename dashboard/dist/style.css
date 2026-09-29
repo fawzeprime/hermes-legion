@@ -615,7 +615,10 @@
 .hf-tree ul {
   display: flex;
   justify-content: center;
-  padding-top: 1.25rem;
+  /* Full padding reset: the UA default `ul { padding-inline-start: 40px }`
+     is never overridden by padding-top alone, which inset every level 40px
+     and offset every drop line 20px from the node it connects to. */
+  padding: 1.25rem 0 0 0;
   position: relative;
   margin: 0;
 }
