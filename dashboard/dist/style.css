@@ -615,7 +615,10 @@
 .hf-tree ul {
   display: flex;
   justify-content: center;
-  padding-top: 1.25rem;
+  /* Full padding reset: the UA default `ul { padding-inline-start: 40px }`
+     is never overridden by padding-top alone, which inset every level 40px
+     and offset every drop line 20px from the node it connects to. */
+  padding: 1.25rem 0 0 0;
   position: relative;
   margin: 0;
 }
@@ -770,6 +773,131 @@
 
 .hf-global-agent-badge {
   font-size: 0.78rem;
+}
+
+/* ---------------------------------------------------------------------
+ * Tab: Scheduled Tasks — agents in hierarchy order with their cron jobs
+ * ------------------------------------------------------------------- */
+
+.hf-sched {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.hf-sched-summary {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.hf-sched-fleet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.hf-sched-fleet h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.hf-sched-agent {
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.hf-sched-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hf-sched-agent-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.hf-sched-agent-team {
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.hf-sched-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid color-mix(in srgb, var(--midground, #ffac02) 45%, transparent);
+}
+
+.hf-sched-task {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.hf-sched-task-main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.hf-sched-task-name {
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.hf-sched-cron {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.hf-sched-task-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  margin-top: 0.2rem;
+}
+
+.hf-sched-task-prompt {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hf-sched-task-error {
+  font-size: 0.72rem;
+  color: #e5534b;
+  margin-top: 0.2rem;
+}
+
+.hf-sched-ok {
+  border-color: color-mix(in srgb, #46a758 60%, transparent);
+  color: #46a758;
+}
+
+.hf-sched-bad {
+  border-color: color-mix(in srgb, #e5534b 60%, transparent);
+  color: #e5534b;
+}
+
+.hf-sched-empty {
+  font-size: 0.78rem;
+  font-style: italic;
+  opacity: 0.55;
+  margin-top: 0.3rem;
+  padding-left: 0.75rem;
 }
 
 /* ---------------------------------------------------------------------

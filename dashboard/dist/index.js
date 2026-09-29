@@ -1317,12 +1317,139 @@
   }
 
   // ---------------------------------------------------------------------
+  // Tab: Scheduled Tasks — each fleet agent listed in hierarchy order
+  // (leader -> manager -> global roles -> team members top-down by
+  // reporting line) with that agent's Hermes cron jobs underneath.
+  // Jobs come from GET /scheduled-tasks (each profile's
+  // ~/.hermes/profiles/<profile>/cron/jobs.json).
+  // ---------------------------------------------------------------------
+
+  function buildHierarchyRoster(company) {
+    const roster = [];
+    const seen = {};
+    function add(profile, role, team) {
+      if (!profile || seen[profile]) return;
+      seen[profile] = true;
+      roster.push({ profile: profile, role: role || "", team: team || "" });
+    }
+    const rolesByType = {};
+    (company.fleet_roles || []).forEach(function (r) { rolesByType[r.role_type] = r; });
+    if (rolesByType["leader"]) add(rolesByType["leader"].profile, FLEET_ROLE_LABELS["leader"], "");
+    if (rolesByType["manager"]) add(rolesByType["manager"].profile, FLEET_ROLE_LABELS["manager"], "");
+    GLOBAL_ROLE_TYPES.forEach(function (rt) {
+      if (rolesByType[rt]) add(rolesByType[rt].profile, FLEET_ROLE_LABELS[rt], "");
+    });
+    (company.teams || []).forEach(function (t) {
+      (function walk(nodes) {
+        nodes.forEach(function (n) {
+          add(n.profile, n.role, t.name);
+          if (n.children && n.children.length > 0) walk(n.children);
+        });
+      })(buildReportingForest(t));
+    });
+    return roster;
+  }
+
+  function ScheduledTaskRow({ job }) {
+    const statusClass = job.last_status === "ok" ? "hf-sched-ok" : "hf-sched-bad";
+    const inactive = job.enabled === false || (job.state && job.state !== "scheduled");
+    return h("div", { className: "hf-sched-task" },
+      h("div", { className: "hf-sched-task-main" },
+        h("span", { className: "hf-sched-task-name" }, job.name || job.id),
+        h(Badge, { tone: "outline", className: "hf-sched-cron" }, job.schedule_display || "unscheduled"),
+        inactive && h(Badge, { tone: "outline" }, job.enabled === false ? "disabled" : (job.state || "paused")),
+        job.last_status && h(Badge, { tone: "outline", className: statusClass }, "last: " + job.last_status)
+      ),
+      h("div", { className: "hf-sched-task-meta" },
+        h("span", null, "next: " + (job.next_run_at || "—")),
+        h("span", null, "last run: " + (job.last_run_at || "—")),
+        h("span", null, "runs: " + (job.runs_completed || 0)),
+        job.deliver && h("span", null, "deliver: " + job.deliver)
+      ),
+      job.prompt_summary && h("div", { className: "hf-sched-task-prompt" }, job.prompt_summary),
+      job.last_error && h("div", { className: "hf-sched-task-error" }, job.last_error)
+    );
+  }
+
+  function ScheduledAgentSection({ entry, jobs }) {
+    return h("div", { className: "hf-sched-agent" },
+      h("div", { className: "hf-sched-agent-header" },
+        h("span", { className: "hf-sched-agent-name" }, entry.profile),
+        entry.role && h(Badge, { tone: "outline" }, entry.role),
+        entry.team && h("span", { className: "hf-sched-agent-team" }, entry.team)
+      ),
+      jobs.length === 0
+        ? h("div", { className: "hf-sched-empty" }, "No scheduled tasks")
+        : h("div", { className: "hf-sched-tasks" }, jobs.map(function (job) {
+            return h(ScheduledTaskRow, { key: job.id, job: job });
+          }))
+    );
+  }
+
+  function ScheduledTasksTab({ companies, profiles, scheduled, loading }) {
+    const jobsByProfile = {};
+    let totalJobs = 0;
+    (scheduled || []).forEach(function (p) {
+      jobsByProfile[p.profile] = p.jobs || [];
+      totalJobs += (p.jobs || []).length;
+    });
+
+    const staffed = {};
+    const fleetSections = [];
+    companies.forEach(function (c) {
+      const roster = buildHierarchyRoster(c);
+      if (roster.length === 0) return;
+      roster.forEach(function (e) { staffed[e.profile] = true; });
+      fleetSections.push({ key: c.id, title: c.name, roster: roster });
+    });
+
+    const unassignedSet = {};
+    profiles.forEach(function (p) { if (!staffed[p]) unassignedSet[p] = true; });
+    Object.keys(jobsByProfile).forEach(function (p) { if (!staffed[p]) unassignedSet[p] = true; });
+    const unassigned = Object.keys(unassignedSet).sort();
+    if (unassigned.length > 0) {
+      fleetSections.push({
+        key: "unassigned",
+        title: "Unassigned agents",
+        roster: unassigned.map(function (p) { return { profile: p, role: "", team: "" }; }),
+      });
+    }
+
+    if (fleetSections.length === 0) {
+      return h(Card, { className: "hf-empty-card" },
+        h(CardContent, null, "No agents yet. Create a fleet and assign agents in the Org Chart tab to see scheduled tasks by hierarchy.")
+      );
+    }
+
+    return h("div", { className: "hf-sched" },
+      h("div", { className: "hf-sched-summary" },
+        totalJobs + " scheduled task" + (totalJobs === 1 ? "" : "s") + " across " +
+        Object.keys(jobsByProfile).length + " agent profile" + (Object.keys(jobsByProfile).length === 1 ? "" : "s") + "."
+      ),
+      loading && h("div", { className: "hf-empty" }, "Loading…"),
+      fleetSections.map(function (section) {
+        return h("div", { key: section.key, className: "hf-sched-fleet" },
+          h("h2", null, section.title),
+          section.roster.map(function (entry) {
+            return h(ScheduledAgentSection, {
+              key: entry.profile,
+              entry: entry,
+              jobs: jobsByProfile[entry.profile] || [],
+            });
+          })
+        );
+      })
+    );
+  }
+
+  // ---------------------------------------------------------------------
   // Page shell
   // ---------------------------------------------------------------------
 
   const TABS = [
     { id: "dashboard", label: "Dashboard" },
     { id: "orgchart", label: "Org Chart" },
+    { id: "scheduled", label: "Scheduled Tasks" },
     { id: "projects", label: "Projects" },
   ];
 
@@ -1331,10 +1458,12 @@
     const [profiles, setProfiles] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [projects, setProjects] = useState([]);
+    const [scheduled, setScheduled] = useState([]);
     const [kanbanBoards, setKanbanBoards] = useState([]);
     const [loading, setLoading] = useState(true);
     const [tasksLoading, setTasksLoading] = useState(true);
     const [projectsLoading, setProjectsLoading] = useState(true);
+    const [scheduledLoading, setScheduledLoading] = useState(true);
     const [error, setError] = useState(null);
     const [tab, setTab] = useState("dashboard");
 
@@ -1362,18 +1491,28 @@
         .finally(function () { setProjectsLoading(false); });
     }, []);
 
+    const loadScheduled = useCallback(function () {
+      setScheduledLoading(true);
+      api("/scheduled-tasks")
+        .then(function (payload) { setScheduled((payload && payload.profiles) || []); })
+        .catch(function () { setScheduled([]); })
+        .finally(function () { setScheduledLoading(false); });
+    }, []);
+
     useEffect(function () {
       load();
       loadTasks();
       loadProjects();
+      loadScheduled();
       api("/profiles").then(function (payload) { setProfiles((payload && payload.profiles) || []); }).catch(function () {});
       api("/boards").then(function (payload) { setKanbanBoards((payload && payload.boards) || []); }).catch(function () {});
-    }, [load, loadTasks, loadProjects]);
+    }, [load, loadTasks, loadProjects, loadScheduled]);
 
     function refreshAll() {
       load();
       loadTasks();
       loadProjects();
+      loadScheduled();
     }
 
     return h("div", { className: "hf-page" },
@@ -1401,6 +1540,9 @@
         onOpenProjects: function () { setTab("projects"); },
       }),
       tab === "orgchart" && h(OrgChartTab, { companies: companies, profiles: profiles, projects: projects, boards: kanbanBoards, loading: loading, error: error, load: load }),
+      tab === "scheduled" && h(ScheduledTasksTab, {
+        companies: companies, profiles: profiles, scheduled: scheduled, loading: scheduledLoading,
+      }),
       tab === "projects" && h(ProjectsTab, {
         projects: projects, tasks: tasks, loading: projectsLoading || tasksLoading, companies: companies,
         onChanged: function () { loadProjects(); loadTasks(); load(); },
